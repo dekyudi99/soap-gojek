@@ -5,7 +5,6 @@ from spyne.server.wsgi import WsgiApplication
 class DriverService(ServiceBase):
     @rpc(Unicode, Unicode, _returns=Unicode)
     def assign_driver(ctx, pickup, destination):
-        # logika sederhana (misalnya driver tetap)
         return f"Driver Budi assigned from {pickup} to {destination}"
 
 application = Application(
