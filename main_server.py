@@ -12,7 +12,6 @@ class OrderSummary(ComplexModel):
     destination = Unicode
 
 MICRO_WSDL = "http://localhost:8001/?wsdl"
-DRIVER_WSDL = "http://localhost:8002/?wsdl"
 
 class OrderService(ServiceBase):
     @rpc(Unicode, Unicode, _returns=OrderSummary)
