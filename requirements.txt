@@ -2,3 +2,4 @@ spyne
 zeep
 lxml
 mysql-connector-python
+PyJWT
