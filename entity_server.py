@@ -31,7 +31,7 @@ def connectToDatabase():
 #--------------------------------------------
 # Entity Service
 #--------------------------------------------
-class EntityService(ServiceBase):
+class UserService(ServiceBase):
     @rpc(Unicode, Unicode, Unicode, Unicode, Unicode, _returns=Boolean)
     def create_user(ctx, name, email, role, password, address):
         try:
@@ -74,7 +74,7 @@ class EntityService(ServiceBase):
                 conn.close()
 
 application = Application(
-    [EntityService],
+    [UserService],
     tns="entity.service",
     in_protocol=Soap11(validator="lxml"),
     out_protocol=Soap11()

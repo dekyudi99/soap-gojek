@@ -2,12 +2,17 @@ from spyne import Application, rpc, ServiceBase, Unicode, Float, Integer, Comple
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
 from zeep import Client
-import time, os, mysql.connector
+import time, os, mysql.connector, jwt, datetime
 from dotenv import load_dotenv
 
 # Memuat Variabel .env
 load_dotenv()
 
+class ServiceResponse(ComplexModel):
+    success = Boolean
+    message = Unicode
+    token = Unicode
+    
 class OrderSummary(ComplexModel):
     orderId = Integer
     driver = Unicode
@@ -40,25 +45,44 @@ class AuthService(ServiceBase):
         except Exception as e:
             print("Yang jelas gagal: ", e)
     
-    @rpc(Unicode, Unicode, _returns=Boolean)
+    @rpc(Unicode, Unicode, _returns=ServiceResponse)
     def login(ctx, email, password):
         try:
             conn = connectToDatabase()
-            cur = conn.cursor()
+            cur = conn.cursor(dictionary=True)
             cur.execute(
-                "SELECT* FROM user WHERE email=%s AND password=%s",
+                "SELECT * FROM user WHERE email=%s AND password=%s",
                 (email, password),
             )
             user = cur.fetchone()
             if user:
-                return True
+                payload = {
+                    "user_id": user["id"],
+                    "email": user["email"],
+                    "role": user["role"],
+                    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+                }
+                token = jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm="HS256")
+                return ServiceResponse(success=True, message="Login Berhasil!", token=token)
+            else:
+                return ServiceResponse(success=False, message="Login Gagal!", token="")
         except Exception as e:
             print("YANG JELAS GAGAL, JANGAN TANYA KENAPA GAGAL!. ", e)
+            return ServiceResponse(success=False, message=f"Terjadi kesalahan: {str(e)}", token="")
         finally:
             if cur:
                 cur.close()
             if conn:
                 conn.close()
+
+    def verify_token(token):
+        try:
+            data = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
+            return True, data
+        except jwt.ExpiredSignatureError:
+            return False, "Token kadaluarsa."
+        except jwt.InvalidTokenError:
+            return False, "Token tidak valid."
 
 #--------------------------------------------
 # Task Service (Order Service)

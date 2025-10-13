@@ -1,14 +1,17 @@
 from zeep import Client
 
 SERVICE_WSDL = "http://localhost:8000/?wsdl"
+USER_WSDL = "http://localhost:8002/?wsdl"
 
 client = Client(SERVICE_WSDL)
+user = Client(USER_WSDL)
 
 # Daftar Service
 service = (
     "1. Daftar",
     "2. Masuk",
     "3. Pesan",
+    "4. Profil",
     "0. Gak Jadi"
 )
 
@@ -32,10 +35,18 @@ while True:
     elif (choose == 2 ):
         email = input("Masukkan Email: ")
         password = input("Masukkan Password: ")
-        auth = client.service.login(email, password)
+        try:
+            result = client.service.login(email, password)
+            auth = result.success
+            print(result.message)
+            print(result.token)
+        except Exception as e:
+            print("GAGALLLL, ", e)
     elif (choose == 3 ):
         if (auth == True):
             print("Berhasil Wokkk")
+        else:
+            print("Gagal Wokkk!")
     elif (choose == 0 ):
         break
     else: 
