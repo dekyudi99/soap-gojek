@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS gojek_clone;
-USE gojek_clone;
+CREATE DATABASE IF NOT EXISTS soap_gojek;
+USE soap_gojek;
 
 -- --------------------------------------------------------
 -- Table: user
@@ -70,6 +70,21 @@ CREATE TABLE payment (
     driver_id INT NOT NULL,
     amount DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+    FOREIGN KEY (driver_id) REFERENCES user(id) ON DELETE CASCADE
+);
+
+-- --------------------------------------------------------
+-- Table: review
+-- --------------------------------------------------------
+CREATE TABLE review (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    driver_id INT NOT NULL,
+    user_id INT NOT NULL,
+    rating FLOAT DEFAULT NULL,
+    review TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_seen TINYINT(1),
     FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
     FOREIGN KEY (driver_id) REFERENCES user(id) ON DELETE CASCADE
 );
