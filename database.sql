@@ -53,6 +53,7 @@ CREATE TABLE transfer (
 CREATE TABLE orders_driver (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
+    driver_id INT NULL,
     pickup VARCHAR(255),
     destination VARCHAR(255),
     total DECIMAL(12,2),

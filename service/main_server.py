@@ -14,11 +14,11 @@ class ServiceResponse(ComplexModel):
     token = Unicode
     
 class OrderSummary(ComplexModel):
-    orderId = Integer
-    driver = Unicode
+    DriverId = Integer
     fare = Float
     pickup = Unicode
     destination = Unicode
+    Status = Unicode
 
 # Koneksi Ke Database
 def connectToDatabase():
@@ -32,6 +32,9 @@ def connectToDatabase():
 MICRO_WSDL = "http://localhost:8001/?wsdl"
 ENTITY_WSDL = "http://localhost:8002/?wsdl"
 
+micro_client = Client(MICRO_WSDL)
+entity_client = Client(ENTITY_WSDL)
+
 #--------------------------------------------
 # Utility Service (Autentikasi)
 #--------------------------------------------
@@ -39,7 +42,6 @@ class AuthService(ServiceBase):
     @rpc(Unicode, Unicode, Unicode, Unicode, Unicode, _returns=Unicode)
     def register(ctx, name, email, role, password, address):
         try:
-            entity_client = Client(ENTITY_WSDL)
             entity_client.service.create_user(name, email, role, password, address)
             return "Register Berhasil, Silakan login!"
         except Exception as e:
@@ -88,38 +90,45 @@ class AuthService(ServiceBase):
 # Task Service (Order Service)
 #--------------------------------------------
 class OrderService(ServiceBase):
-    @rpc(Unicode, Unicode, _returns=OrderSummary)
-    def request_driver(ctx, pickup, destination):
-        micro_client = Client(MICRO_WSDL)
-
-        fare = micro_client.service.calculate_fare(pickup, destination)
-        order_id = 1
-
-        micro_client.service.receive_order(order_id, pickup, destination)
-
-        while True:
-            status = micro_client.service.get_order_status(order_id)
-
-            if status == "confirmed":
-                driver_assigned = micro_client.service.assign_driver(pickup, destination)
-                return OrderSummary(
-                    orderId=order_id,
-                    driver=driver_assigned,
-                    fare=fare,
-                    pickup=pickup,
-                    destination=destination
+    @rpc(Unicode, Unicode, Unicode, _returns=OrderSummary)
+    def request_driver(ctx, token, pickup, destination):
+        valid, data = AuthService.verify_token(token)
+        if valid:
+            try:
+                conn = connectToDatabase()
+                cur = conn.cursor(dictionary=True)
+                cur.execute(
+                    "SELECT * FROM user WHERE id=%s", (data["user_id"],)
                 )
+                user = cur.fetchone()
 
-            elif status == "rejected":
-                return OrderSummary(
-                    orderId=order_id,
-                    driver="No driver available",
-                    fare=0.0, pickup=pickup,
-                    destination=destination
-                )
+                fare = int(micro_client.service.calculate_fare(pickup, destination))
 
-            print("Waiting for driver confirmation...")
-            time.sleep(2)
+                createSuccess = entity_client.service.create_order(user["id"], pickup, destination, fare)
+                if createSuccess:
+                    return OrderSummary(fare=fare, pickup=pickup, destination=destination)
+            except Exception as e:
+                print(e)
+            finally:
+                if cur:
+                    cur.close()
+                if conn:
+                    conn.close()
+    
+    @rpc(Unicode, Unicode, Integer, _returns=Boolean)
+    def konfirmasi_order(ctx, token, confirm, order_id):
+        valid, data = AuthService.verify_token(token)
+        if valid:
+            try:
+                entity_client.service.update_order("driver_id", data["user_id"], order_id)
+                entity_client.service.update_order("status", confirm, order_id)
+                return True
+            except Exception as e:
+                print("Error konfirmasi_order:", e)
+                return False
+        else:
+            print("Token tidak valid.")
+            return False
 
 
 application = Application(
