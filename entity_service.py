@@ -49,7 +49,6 @@ class EntityService(ServiceBase):
         try:
             conn = connectToDatabase()
             cur = conn.cursor(dictionary=True)
-            # --- PERBAIKAN: Lakukan JOIN dengan tabel user untuk mendapatkan nama ---
             query = """
                 SELECT
                     r.id, r.user_id, r.rating, r.review, u.name as customer_name

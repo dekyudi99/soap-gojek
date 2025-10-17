@@ -36,10 +36,7 @@ class Order(ComplexModel):
     # --- TAMBAHAN: Tambahkan field untuk nama pelanggan ---
     customer_name = Unicode(min_occurs=0)
 
-
-# --- Service untuk Logika Order ---
 class OrderMicroService(ServiceBase):
-    # ... (fungsi create_order, accept_order, complete_order, dll tetap sama) ...
 
     @rpc(_returns=Iterable(Order))
     def find_pending_orders(ctx):
@@ -48,7 +45,6 @@ class OrderMicroService(ServiceBase):
         try:
             conn = connectToDatabase()
             cur = conn.cursor(dictionary=True)
-            # --- PERBAIKAN: Lakukan JOIN dengan tabel user untuk mendapatkan nama ---
             query = """
                 SELECT
                     o.id, o.user_id, o.driver_id, o.pickup, o.destination,
@@ -75,7 +71,6 @@ class OrderMicroService(ServiceBase):
             if conn:
                 conn.close()
     
-    # ... (Sisa fungsi lainnya tidak perlu diubah)
     @rpc(Integer, Unicode, Unicode, _returns=Integer)
     def create_order(ctx, user_id, pickup, destination):
         conn = None

@@ -52,12 +52,11 @@ class OrderHistoryItem(ComplexModel):
     status = Unicode
 
 class ReviewInfo(ComplexModel):
-    __namespace__ = 'gojek.models' # Tambahkan namespace agar konsisten
+    __namespace__ = 'gojek.models'
     id = Integer
     user_id = Integer
     rating = Float
     review = Unicode
-    # --- TAMBAHAN: Tambahkan field untuk nama pelanggan ---
     customer_name = Unicode(min_occurs=0)
 
 def connectToDatabase():
@@ -70,7 +69,7 @@ def connectToDatabase():
     )
 # --- Service untuk Autentikasi ---
 class AuthService(ServiceBase):
-    # ... (service ini tetap sama)
+    
     @rpc(Unicode, Unicode, Unicode, Unicode, Unicode, _returns=Unicode)
     def register(ctx, name, email, role, password, address):
         try:
@@ -104,9 +103,8 @@ class AuthService(ServiceBase):
         finally:
             if conn:
                 conn.close()
-# --- Service untuk Fitur Pengguna ---
+
 class UserService(ServiceBase):
-    # ... (fungsi request_driver, get_completed_orders, give_review tetap sama) ...
     @rpc(Integer, _returns=Iterable(ReviewInfo))
     def check_for_new_reviews(ctx, driver_id):
         """Meneruskan permintaan untuk memeriksa review baru ke entity_service."""
@@ -114,13 +112,11 @@ class UserService(ServiceBase):
             unseen_reviews = entity_client.service.get_unseen_reviews(driver_id)
             if unseen_reviews:
                 entity_client.service.mark_reviews_as_seen(driver_id)
-            # Spyne akan otomatis memetakan field yang namanya sama
             return unseen_reviews
         except Exception as e:
             logger.error(f"Error saat memeriksa review baru untuk driver {driver_id}: {e}")
             return []
     
-    # ... (Sisa fungsi lainnya tidak perlu diubah)
     @rpc(Integer, Unicode, Unicode, _returns=OrderSummary)
     def request_driver(ctx, user_id, pickup, destination):
         try:
