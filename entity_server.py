@@ -5,6 +5,13 @@ from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
 import mysql.connector
 from dotenv import load_dotenv
+import json
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -25,10 +32,8 @@ class Review(ComplexModel):
     user_id = Integer
     rating = Float
     review = Unicode
-    # --- TAMBAHAN: Tambahkan field untuk nama pelanggan ---
     customer_name = Unicode(min_occurs=0)
 
-# Koneksi Ke Database
 def connectToDatabase():
     return mysql.connector.connect(
         host=os.getenv("DB_HOST"),
@@ -41,32 +46,6 @@ def connectToDatabase():
 # Entity Service
 #--------------------------------------------
 class EntityService(ServiceBase):
-    # ... (fungsi create_user, get_user, create_review, mark_reviews_as_seen tetap sama) ...
-    @rpc(Integer, _returns=Iterable(Review))
-    def get_unseen_reviews(ctx, driver_id):
-        """Mengambil semua review untuk driver yang belum dilihat dan menyertakan nama pelanggan."""
-        conn = None
-        try:
-            conn = connectToDatabase()
-            cur = conn.cursor(dictionary=True)
-            query = """
-                SELECT
-                    r.id, r.user_id, r.rating, r.review, u.name as customer_name
-                FROM review r
-                JOIN user u ON r.user_id = u.id
-                WHERE r.driver_id = %s AND r.is_seen = FALSE
-            """
-            cur.execute(query, (driver_id,))
-            reviews = cur.fetchall()
-            return [Review(**r) for r in reviews]
-        except Exception as e:
-            print(f"Gagal mengambil unseen reviews: {e}")
-            return []
-        finally:
-            if conn:
-                conn.close()
-
-    # ... (Sisa fungsi lainnya tidak perlu diubah)
     @rpc(Unicode, Unicode, Unicode, Unicode, Unicode, _returns=Boolean)
     def create_user(ctx, name, email, role, password, address):
         conn = None
@@ -75,7 +54,7 @@ class EntityService(ServiceBase):
             conn = connectToDatabase()
             cur = conn.cursor()
             cur.execute(
-                "INSERT INTO user (name, email, role, password, address) VALUES (%s, %s, %s, %s, %s)",
+                "INSERT INTO user (name, email, role, password, address) VALUES (%s, %s, %s, SHA2(%s, 256), %s)",
                 (name, email, role, password, address),
             )
             conn.commit()
@@ -126,34 +105,47 @@ class EntityService(ServiceBase):
         try:
             conn = connectToDatabase()
             cur = conn.cursor()
+            
+            # 1. Simpan review ke Database
             query = "INSERT INTO review (user_id, driver_id, rating, review) VALUES (%s, %s, %s, %s)"
             cur.execute(query, (user_id, driver_id, rating, review_text))
-            conn.commit()
+            
+            # 2. Kirim notifikasi ke Redpanda/Kafka
+            try:
+                producer = KafkaProducer(
+                    bootstrap_servers=['localhost:9092'],
+                    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+                )
+                
+                # Ambil nama pelanggan untuk disertakan di notifikasi
+                cur.execute("SELECT name FROM user WHERE id=%s", (user_id,))
+                customer_name = cur.fetchone()[0]
+
+                # Siapkan isi pesan
+                message_payload = {
+                    'driver_id': driver_id,
+                    'customer_name': customer_name,
+                    'rating': rating,
+                    'review': review_text
+                }
+                
+                topic = 'new-reviews'
+                future = producer.send(topic, value=message_payload)
+                future.get(timeout=10)
+                logger.info(f" [🚀] Pesan review untuk driver ID {driver_id} berhasil dikirim ke topic '{topic}'")
+
+            except KafkaError as e:
+                logger.error(f"Gagal mengirim pesan review ke Kafka/Redpanda: {e}")
+
             return True
         except Exception as e:
             print(f"Gagal menyimpan review: {e}")
             return False
         finally:
             if conn:
-                conn.close()
+                cur.close()
                 conn.close()
 
-    @rpc(Integer, _returns=Boolean)
-    def mark_reviews_as_seen(ctx, driver_id):
-        conn = None
-        try:
-            conn = connectToDatabase()
-            cur = conn.cursor()
-            query = "UPDATE review SET is_seen = TRUE WHERE driver_id = %s AND is_seen = FALSE"
-            cur.execute(query, (driver_id,))
-            conn.commit()
-            return True
-        except Exception as e:
-            print(f"Gagal menandai review sebagai seen: {e}")
-            return False
-        finally:
-            if conn:
-                conn.close()
 # --- Pengaturan Aplikasi Spyne ---
 application = Application(
     [EntityService],

@@ -25,7 +25,6 @@ except Exception as e:
     logger.error(f"Gagal terhubung ke WSDL service lain. Pastikan service tersebut berjalan. Error: {e}")
     exit()
 
-# --- Model Data Kompleks ---
 class UserLoginResponse(ComplexModel):
     __namespace__ = 'gojek.models'
     status = Boolean
@@ -51,23 +50,17 @@ class OrderHistoryItem(ComplexModel):
     total = Float
     status = Unicode
 
-class ReviewInfo(ComplexModel):
-    __namespace__ = 'gojek.models'
-    id = Integer
-    user_id = Integer
-    rating = Float
-    review = Unicode
-    customer_name = Unicode(min_occurs=0)
-
 def connectToDatabase():
-    # ... (fungsi ini tetap sama)
     return mysql.connector.connect(
         host=os.getenv("DB_HOST"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
         database=os.getenv("DB_DATABASE"),
     )
-# --- Service untuk Autentikasi ---
+
+#--------------------------------------------
+# Utility Service (Autentikasi)
+#--------------------------------------------
 class AuthService(ServiceBase):
     
     @rpc(Unicode, Unicode, Unicode, Unicode, Unicode, _returns=Unicode)
@@ -89,7 +82,7 @@ class AuthService(ServiceBase):
         try:
             conn = connectToDatabase()
             cur = conn.cursor(dictionary=True)
-            cur.execute("SELECT id, name, role, password FROM user WHERE email=%s", (email,))
+            cur.execute("SELECT id, name, role, password FROM user WHERE email=%s AND password=SHA2(%s, 256)", (email, password))
             user = cur.fetchone()
             if user and user['password'] == password:
                 logger.info(f"Login berhasil untuk user: {email}")
@@ -104,19 +97,10 @@ class AuthService(ServiceBase):
             if conn:
                 conn.close()
 
-class UserService(ServiceBase):
-    @rpc(Integer, _returns=Iterable(ReviewInfo))
-    def check_for_new_reviews(ctx, driver_id):
-        """Meneruskan permintaan untuk memeriksa review baru ke entity_service."""
-        try:
-            unseen_reviews = entity_client.service.get_unseen_reviews(driver_id)
-            if unseen_reviews:
-                entity_client.service.mark_reviews_as_seen(driver_id)
-            return unseen_reviews
-        except Exception as e:
-            logger.error(f"Error saat memeriksa review baru untuk driver {driver_id}: {e}")
-            return []
-    
+#--------------------------------------------
+# Task Service
+#--------------------------------------------
+class UserService(ServiceBase):  
     @rpc(Integer, Unicode, Unicode, _returns=OrderSummary)
     def request_driver(ctx, user_id, pickup, destination):
         try:

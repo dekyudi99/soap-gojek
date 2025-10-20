@@ -3,3 +3,5 @@ zeep
 lxml
 mysql-connector-python
 PyJWT
+python-dotenv
+kafka-python
